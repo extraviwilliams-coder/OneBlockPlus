@@ -1,0 +1,53 @@
+name: Build OneBlock Plus
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Make Gradle executable
+        working-directory: forge-1.20.1-47.4.10-mdk
+        run: chmod +x gradlew
+
+      - name: Embed OneBlock data into the mod
+        shell: bash
+        run: |
+          set -euo pipefail
+          target="forge-1.20.1-47.4.10-mdk/src/main/resources/data"
+          rm -rf "$target"
+          mkdir -p "$target"
+          cp -R OneBlock_Reborn/data/. "$target/"
+          cp OneBlock_Reborn/pack.mcmeta forge-1.20.1-47.4.10-mdk/src/main/resources/pack.mcmeta
+          rm -f "$target/gamerz_riot/README.txt"
+
+          # Remove only in-game promotional text. Keep LICENSE.txt outside the jar
+          # source tree and preserve it in the repository for licensing compliance.
+          python3 tools/strip_credits.py forge-1.20.1-47.4.10-mdk/src/main/resources
+
+      - name: Build the standalone mod
+        working-directory: forge-1.20.1-47.4.10-mdk
+        run: ./gradlew clean build --no-daemon --stacktrace
+
+      - name: Upload the mod jar
+        uses: actions/upload-artifact@v4
+        with:
+          name: oneblockplus-forge-1.20.1
+          path: forge-1.20.1-47.4.10-mdk/build/libs/*.jar
+          if-no-files-found: error
